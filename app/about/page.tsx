@@ -1,11 +1,14 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Section, SectionHeader } from '@/components/ui/section';
 import { Stats } from '@/components/shared/stats';
 import { CTA } from '@/components/shared/cta';
 import { OptimizedImage } from '@/components/ui/optimized-image';
-import { Target, Eye, Heart, Shield, Zap, Award, Users, Dumbbell } from 'lucide-react';
+import { Target, Eye, Heart, Shield, Zap, Award, Users, Dumbbell, AlertCircle } from 'lucide-react';
+import { supabase } from '@/lib/supabase-client';
+import type { Facility } from '@/lib/types';
 
 const story = {
   title: 'Our Story',
@@ -37,16 +40,49 @@ const values = [
   { icon: Dumbbell, title: 'Progress', description: 'We measure success in personal bests, not just in kilos lost or gained.' },
 ];
 
-const facilities = [
-  { title: 'Strength Zone', description: 'Competition-grade power racks, Olympic platforms, calibrated plates, and a full range of Hammer Strength machines.', image: 'https://images.pexels.com/photos/1552252/pexels-photo-1552252.jpeg?auto=compress&cs=tinysrgb&w=600' },
-  { title: 'Cardio Deck', description: 'Premium treadmills, assault bikes, rowers, and stair climbers with personal screens and a view of the training floor.', image: 'https://images.pexels.com/photos/703012/pexels-photo-703012.jpeg?auto=compress&cs=tinysrgb&w=600' },
-  { title: 'Functional Training Area', description: 'Kettlebells, sled tracks, battle ropes, and open turf for CrossFit-style WODs and mobility work.', image: 'https://images.pexels.com/photos/4664726/pexels-photo-4664726.jpeg?auto=compress&cs=tinysrgb&w=600' },
-  { title: 'Group Studio', description: 'A dedicated soundproof studio for HIIT, yoga, dance fitness, and spin classes with a premium sound system.', image: 'https://images.pexels.com/photos/4753986/pexels-photo-4753986.jpeg?auto=compress&cs=tinysrgb&w=600' },
-  { title: 'Recovery Lounge', description: 'Foam rollers, massage guns, a stretching area, and a hydration station to help you recover and refuel.', image: 'https://images.pexels.com/photos/3823039/pexels-photo-3823039.jpeg?auto=compress&cs=tinysrgb&w=600' },
-  { title: 'Locker Rooms', description: 'Spacious, climate-controlled locker rooms with hot showers, fresh towels, and daily-use lockers.', image: 'https://images.pexels.com/photos/3768916/pexels-photo-3768916.jpeg?auto=compress&cs=tinysrgb&w=600' },
+const fallbackFacilities = [
+  { name: 'Strength Zone', description: 'Competition-grade power racks, Olympic platforms, calibrated plates, and a full range of Hammer Strength machines.', image: 'https://images.pexels.com/photos/1552252/pexels-photo-1552252.jpeg?auto=compress&cs=tinysrgb&w=600' },
+  { name: 'Cardio Deck', description: 'Premium treadmills, assault bikes, rowers, and stair climbers with personal screens and a view of the training floor.', image: 'https://images.pexels.com/photos/703012/pexels-photo-703012.jpeg?auto=compress&cs=tinysrgb&w=600' },
+  { name: 'Functional Training Area', description: 'Kettlebells, sled tracks, battle ropes, and open turf for CrossFit-style WODs and mobility work.', image: 'https://images.pexels.com/photos/4664726/pexels-photo-4664726.jpeg?auto=compress&cs=tinysrgb&w=600' },
+  { name: 'Group Studio', description: 'A dedicated soundproof studio for HIIT, yoga, dance fitness, and spin classes with a premium sound system.', image: 'https://images.pexels.com/photos/4753986/pexels-photo-4753986.jpeg?auto=compress&cs=tinysrgb&w=600' },
+  { name: 'Recovery Lounge', description: 'Foam rollers, massage guns, a stretching area, and a hydration station to help you recover and refuel.', image: 'https://images.pexels.com/photos/3823039/pexels-photo-3823039.jpeg?auto=compress&cs=tinysrgb&w=600' },
+  { name: 'Locker Rooms', description: 'Spacious, climate-controlled locker rooms with hot showers, fresh towels, and daily-use lockers.', image: 'https://images.pexels.com/photos/3768916/pexels-photo-3768916.jpeg?auto=compress&cs=tinysrgb&w=600' },
 ];
 
+interface DisplayFacility {
+  name: string;
+  description: string;
+  image: string;
+}
+
 export default function AboutPage() {
+  const [facilities, setFacilities] = useState<DisplayFacility[]>(fallbackFacilities);
+  const [facilitiesError, setFacilitiesError] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('facilities')
+          .select('*')
+          .eq('published', true)
+          .order('sort_order', { ascending: true });
+        if (error) throw error;
+        if (mounted && data && data.length > 0) {
+          setFacilities(data.map((f: Facility) => ({
+            name: f.name,
+            description: f.description || '',
+            image: f.image || 'https://images.pexels.com/photos/1552252/pexels-photo-1552252.jpeg?auto=compress&cs=tinysrgb&w=600',
+          })));
+        }
+      } catch {
+        if (mounted) setFacilitiesError(true);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
   return (
     <>
       {/* Hero */}
@@ -225,10 +261,16 @@ export default function AboutPage() {
           title="World-class, every square foot"
           description="Six purpose-built zones designed to cover every aspect of your training — from heavy lifting to mindful recovery."
         />
+        {facilitiesError && (
+          <div className="mb-6 flex items-center gap-2 rounded-2xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-700">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <span>Showing default facility information. Live updates are temporarily unavailable.</span>
+          </div>
+        )}
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
           {facilities.map((f, i) => (
             <motion.article
-              key={f.title}
+              key={f.name}
               initial={{ opacity: 0, y: 40 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: '-50px' }}
@@ -238,14 +280,14 @@ export default function AboutPage() {
               <div className="relative h-52 overflow-hidden">
                 <OptimizedImage
                   src={f.image}
-                  alt={f.title}
+                  alt={f.name}
                   fill
                   wrapperClassName="h-52"
                   className="object-cover transition-transform duration-700 group-hover:scale-110"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                 <h3 className="absolute bottom-4 left-5 font-display text-xl font-bold text-white">
-                  {f.title}
+                  {f.name}
                 </h3>
               </div>
               <p className="p-5 text-sm text-muted-foreground leading-relaxed">
